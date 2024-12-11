@@ -6,6 +6,8 @@ host = "0.0.0.0"
 
 server = socket.socket()
 
+socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
 server.bind((host, port))
 
 server.listen(5)
@@ -32,6 +34,7 @@ def send(fromConnection):
             else:
                 break
     except:
+        client.clear()
         print("Client Disconnected")
 
 start()
