@@ -5,7 +5,7 @@ import sys
 from collections import deque
 import time
 
-host = "18.193.224.250"
+host = "16.171.15.161"
 port = 5000
 
 Format = pyaudio.paInt16
