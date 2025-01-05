@@ -5,7 +5,7 @@ import sys
 from collections import deque
 import time
 
-host = "16.171.15.161"
+host = "13.60.193.50"
 port = 5000
 
 Format = pyaudio.paInt16
@@ -26,11 +26,18 @@ playback_threads = {}
 BUFFER_FILL_THRESHOLD = 2  # Start with fewer chunks to reduce initial delay
 # We will no longer strictly sleep TIME_PER_CHUNK each iteration, we'll just try to play continuously.
 
+import socket
+
 def connect_to_server():
-    client = socket.socket()
-    client.connect((host, port))
-    welcome_message = client.recv(4096).decode('utf-8')
-    return client, welcome_message
+    try:
+        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client.connect((host, port))  # Replace with actual IP and Port
+        welcome_message = client.recv(4096).decode('utf-8')
+        return client, welcome_message
+    except Exception as e:
+        print(f"Failed to connect to server: {e}")
+        return None, None
+
 
 def choose_room(client):
     while True:
@@ -102,12 +109,27 @@ def play_audio_data_for_user(user_id, audio_data):
 
 def parse_server_messages(client):
     global stop_audio_threads, my_client_id
-    f = client.makefile('rb')
+
+    if client is None:
+        print("Error: Client socket is None. Cannot start message parsing.")
+        return
+
+    try:
+        f = client.makefile('rb')  # Ensure this doesn't fail silently
+    except AttributeError:
+        print("Error: Client socket is invalid. Cannot create file object.")
+        return
+    except Exception as e:
+        print(f"Unexpected error creating file object: {e}")
+        return
+
     while not stop_audio_threads:
         try:
             header_line = f.readline()
             if not header_line:
+                print("Connection closed by server.")
                 break
+
             header_line = header_line.strip()
             if header_line.startswith(b"DATA:"):
                 # Format: DATA:<sender_id>:<length>
@@ -118,20 +140,26 @@ def parse_server_messages(client):
                     length = int(length_str)
                     audio_data = f.read(length)
                     if not audio_data or len(audio_data) < length:
+                        print("Incomplete audio data received.")
                         break
                     play_audio_data_for_user(sender_id, audio_data)
+
             elif header_line.startswith(b"ID:"):
                 line_str = header_line.decode('utf-8')
                 my_client_id = int(line_str.split("ID:")[-1])
                 print(f"Assigned Client ID: {my_client_id}")
+
             else:
                 # Control message
                 line_str = header_line.decode('utf-8')
                 if line_str:
-                    print(line_str)
+                    print(f"Control Message: {line_str}")
+
         except Exception as e:
             print("Error receiving server messages:", e)
             break
+
+    print("Stopping message parsing thread.")
 
 def audio_sender(client, input_stream):
     global stop_audio_threads
